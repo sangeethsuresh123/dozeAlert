@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DozeAlert — Drowsiness Detector</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>DozeAlert</h1>
+      <div id="status-container" class="status-container"></div>
+      <div class="header-controls">
+        <button id="settings-btn" class="btn">⚙ Settings</button>
+      </div>
+    </header>
+
+    <!-- Error banner -->
+    <div id="error-banner" class="error-banner" style="display:none"></div>
+
+    <!-- Main content -->
+    <main class="app-main">
+      <!-- Camera view -->
+      <div class="camera-view">
+        <video id="webcam-video" autoplay muted playsinline></video>
+        <canvas id="landmark-canvas"></canvas>
+        <div class="camera-placeholder" id="camera-placeholder">
+          <p>📷 Camera not started</p>
+          <p>Click "Start Tracking" to begin</p>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <button id="start-btn" class="btn btn-primary">▶ Start Tracking</button>
+        <button id="pause-btn" class="btn btn-danger">⏸ Pause</button>
+      </div>
+
+      <!-- Privacy note -->
+      <div id="privacy-note" class="privacy-note">
+        🔒 All video processing happens locally in your browser. No video frames or images are ever uploaded or sent anywhere.
+      </div>
+
+      <!-- Browser support note -->
+      <div class="support-note">
+        💡 Best with Chrome or Edge. Uses <a href="https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker" target="_blank">MediaPipe FaceLandmarker</a> running fully client-side.
+      </div>
+    </main>
+
+    <!-- Alarm overlay container -->
+    <div id="alarm-container"></div>
+
+    <!-- Settings panel container -->
+    <div id="settings-container"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
