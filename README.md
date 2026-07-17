@@ -1,6 +1,6 @@
 # DozeAlert — Webcam Drowsiness Detector
 
-A web app that detects when you've fallen asleep using your webcam and plays a motivational video playlist until you prove you're awake.
+A vibecoded web app that detects when you've fallen asleep using your webcam and plays a motivational video playlist until you prove you're awake.
 
 **Live demo**: [doze-alert.vercel.app](https://doze-alert.vercel.app/)
 
