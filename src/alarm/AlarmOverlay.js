@@ -59,11 +59,14 @@ export function createAlarmOverlay() {
   let localVideoEl = null
   let isPlaying = false
   let playInterval = null
+  let alarmAudioCtx = null
+  let alarmOscillator = null
+  let alarmLoopId = null
 
   function show() {
     overlay.classList.remove('hidden')
     overlay.style.display = 'flex'
-    // Show explanation on first trigger
+    if (document.hidden) playAlarmSound()
     if (!getSetting('hasSeenDismissalInfo')) {
       explanation.style.display = 'block'
       import('../settings/SettingsStore.js').then(mod => {
@@ -76,6 +79,7 @@ export function createAlarmOverlay() {
     overlay.classList.add('hidden')
     overlay.style.display = 'none'
     stopPlayback()
+    stopAlarmSound()
     explanation.style.display = 'none'
   }
 
@@ -84,6 +88,63 @@ export function createAlarmOverlay() {
       clickCounter.textContent = ''
     } else {
       clickCounter.textContent = `Click ${count}/${required}`
+    }
+  }
+
+  // --- Audio alarm (Web Audio API — works even in background tabs) ---
+
+  function playAlarmSound() {
+    try {
+      alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)()
+      alarmOscillator = alarmAudioCtx.createOscillator()
+      const gainNode = alarmAudioCtx.createGain()
+
+      alarmOscillator.type = 'square'
+      alarmOscillator.frequency.setValueAtTime(800, alarmAudioCtx.currentTime)
+      // Alternate between 800Hz and 1000Hz for urgency
+      alarmOscillator.frequency.setValueAtTime(800, alarmAudioCtx.currentTime)
+      alarmOscillator.frequency.setValueAtTime(1000, alarmAudioCtx.currentTime + 0.3)
+      alarmOscillator.frequency.setValueAtTime(800, alarmAudioCtx.currentTime + 0.6)
+      alarmOscillator.frequency.setValueAtTime(1000, alarmAudioCtx.currentTime + 0.9)
+
+      gainNode.gain.setValueAtTime(0.3, alarmAudioCtx.currentTime)
+
+      alarmOscillator.connect(gainNode)
+      gainNode.connect(alarmAudioCtx.destination)
+      alarmOscillator.start()
+
+      // Loop the alarm pattern
+      alarmLoopId = setInterval(() => {
+        if (!alarmOscillator || !alarmAudioCtx) return
+        const t = alarmAudioCtx.currentTime
+        alarmOscillator.frequency.setValueAtTime(800, t)
+        alarmOscillator.frequency.setValueAtTime(1000, t + 0.3)
+        alarmOscillator.frequency.setValueAtTime(800, t + 0.6)
+        alarmOscillator.frequency.setValueAtTime(1000, t + 0.9)
+      }, 1200)
+    } catch {
+      // Web Audio not supported — video will be the only alarm
+    }
+  }
+
+  function stopAlarmSound() {
+    if (alarmLoopId) {
+      clearInterval(alarmLoopId)
+      alarmLoopId = null
+    }
+    if (alarmOscillator) {
+      try { alarmOscillator.stop() } catch {}
+      alarmOscillator = null
+    }
+    if (alarmAudioCtx) {
+      try { alarmAudioCtx.close() } catch {}
+      alarmAudioCtx = null
+    }
+  }
+
+  function resumePlaybackIfHidden() {
+    if (!document.hidden && localVideoEl && localVideoEl.paused) {
+      localVideoEl.play().catch(() => {})
     }
   }
 
@@ -188,7 +249,9 @@ export function createAlarmOverlay() {
     hideEyeCheck,
     startPlaylist,
     stopPlayback,
+    stopAlarmSound,
     nextTrack,
+    resumePlaybackIfHidden,
     getAwakeButton: () => awakeBtn,
     getEyeCheckVideo: () => eyeCheckVideo,
   }

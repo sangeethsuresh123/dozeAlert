@@ -36,6 +36,7 @@ const errorBanner = document.getElementById('error-banner')
 // --- State ---
 let tracking = false
 let animFrameId = null
+let setIntervalId = null
 let eyeCheckRunning = false
 let machine = null
 let dismissal = null
@@ -87,6 +88,9 @@ async function init() {
   // Show start state
   pauseBtn.style.display = 'none'
 
+  // Switch detection loop when tab visibility changes
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+
   console.log('DozeAlert initialized')
 }
 
@@ -114,8 +118,12 @@ async function startTracking() {
     startBtn.style.display = 'none'
     pauseBtn.style.display = 'inline-block'
 
-    // Start frame loop
-    detectFrame()
+    // Pre-request notification permission for background alerts
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    startDetectionLoop()
   } catch (err) {
     showError(err.message)
     statusBadge.update('ERROR')
@@ -124,10 +132,7 @@ async function startTracking() {
 
 function pauseTracking() {
   tracking = false
-  if (animFrameId) {
-    cancelAnimationFrame(animFrameId)
-    animFrameId = null
-  }
+  stopDetectionLoop()
   stopCamera()
   videoEl.srcObject = null
   startBtn.style.display = 'inline-block'
@@ -143,11 +148,7 @@ function detectFrame() {
 
   if (result.faceDetected) {
     const ear = computeFaceEAR(result.landmarks)
-
-    // Draw landmarks on canvas for debugging
     drawLandmarks(result.landmarks)
-
-    // Feed to state machine
     machine.update(ear, true, now)
   } else {
     machine.update(0, false, now)
@@ -155,6 +156,68 @@ function detectFrame() {
   }
 
   animFrameId = requestAnimationFrame(detectFrame)
+}
+
+function detectFrameInterval() {
+  if (!tracking) return
+
+  const now = performance.now()
+  const result = detectLandmarks(videoEl, now)
+
+  if (result.faceDetected) {
+    const ear = computeFaceEAR(result.landmarks)
+    drawLandmarks(result.landmarks)
+    machine.update(ear, true, now)
+  } else {
+    machine.update(0, false, now)
+    clearCanvas()
+  }
+}
+
+function startDetectionLoop() {
+  stopDetectionLoop()
+  if (document.hidden) {
+    setIntervalId = setInterval(detectFrameInterval, 100)
+  } else {
+    animFrameId = requestAnimationFrame(detectFrame)
+  }
+}
+
+function stopDetectionLoop() {
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId)
+    animFrameId = null
+  }
+  if (setIntervalId) {
+    clearInterval(setIntervalId)
+    setIntervalId = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (!tracking) return
+
+  if (document.hidden) {
+    // Tab hidden: switch to setInterval (rAF pauses in background)
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId)
+      animFrameId = null
+    }
+    if (!setIntervalId) {
+      setIntervalId = setInterval(detectFrameInterval, 100)
+    }
+  } else {
+    // Tab visible: switch back to rAF + stop buzzer + resume video
+    if (setIntervalId) {
+      clearInterval(setIntervalId)
+      setIntervalId = null
+    }
+    if (!animFrameId) {
+      animFrameId = requestAnimationFrame(detectFrame)
+    }
+    alarmOverlay?.stopAlarmSound()
+    alarmOverlay?.resumePlaybackIfHidden()
+  }
 }
 
 // --- State handling ---
@@ -171,6 +234,28 @@ function triggerAlarm() {
   alarmOverlay.show()
   alarmOverlay.startPlaylist()
   dismissal.start()
+
+  // System notification (works even when tab is in background)
+  if (document.hidden && 'Notification' in window) {
+    if (Notification.permission === 'granted') {
+      sendAlarmNotification()
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') sendAlarmNotification()
+      })
+    }
+  }
+}
+
+function sendAlarmNotification() {
+  try {
+    const n = new Notification('DozeAlert — WAKE UP!', {
+      body: 'You appear to be drowsy. Come back to dismiss the alarm.',
+      tag: 'dozealert-alarm',
+      requireInteraction: true,
+    })
+    n.onclick = () => { window.focus(); n.close() }
+  } catch {}
 }
 
 function handleDismissalStateChange(newState, oldState, meta) {
